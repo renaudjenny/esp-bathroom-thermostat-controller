@@ -1,0 +1,5 @@
+{
+    "idf.adapterTargetName": "esp32c6",
+    "idf.flashType": "UART",
+    "idf.port": "/dev/tty.wchusbserial57350187111"
+}

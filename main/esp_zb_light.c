@@ -1,4 +1,3 @@
-#warning Fix the CMake path to ZigBee repository reference
 #include "esp_zb_light.h"
 #include "esp_check.h"
 #include "esp_log.h"

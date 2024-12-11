@@ -1,6 +1,6 @@
 dependencies:
   espressif/esp-zboss-lib:
-    component_hash: fad683f7e04366398b61c0eea6e6517d4fe7ec4112407e26743dc80bafc0dcdc
+    component_hash: 470b2745685a0f2261e4499c54fecadac4d10e75bd58bd5bfa2588c74bfae9e1
     dependencies:
     - name: idf
       require: private
@@ -8,9 +8,9 @@ dependencies:
     source:
       registry_url: https://components.espressif.com/
       type: service
-    version: 1.6.0
+    version: 1.6.1
   espressif/esp-zigbee-lib:
-    component_hash: 0026979f590d7f2b07f433bb0fd031a12b0c2cc0eec8584b59cb6e567d5afd82
+    component_hash: 88f4684a7c5551a6edf5bffbf0e87739b694946976e24fb253d95c357ce4b512
     dependencies:
     - name: idf
       require: private
@@ -18,12 +18,11 @@ dependencies:
     source:
       registry_url: https://components.espressif.com/
       type: service
-    version: 1.6.0
+    version: 1.6.1
   espressif/led_strip:
     component_hash: 7e92a0c8a2e35b40904f88e88ce3c0dffff504a2763f70fba7ef4787cf2eec83
     dependencies:
     - name: idf
-      registry_url: https://components.espressif.com
       require: private
       version: '>=5.0'
     source:
@@ -34,11 +33,40 @@ dependencies:
     source:
       type: idf
     version: 5.5.0
+  light_driver:
+    dependencies:
+    - name: idf
+      version: '>=5.0'
+    source:
+      path: /Users/renaudjenny/Developer/esp/bathroom_thermostat_controller/esp_zb_examples_common/light_driver
+      type: local
+    version: 0.0.1
+  switch_driver:
+    dependencies:
+    - name: idf
+      version: '>=5.0'
+    source:
+      path: /Users/renaudjenny/Developer/esp/bathroom_thermostat_controller/esp_zb_examples_common/switch_driver
+      type: local
+    version: 0.0.1
+  zcl_utility:
+    dependencies:
+    - name: idf
+      version: '>=5.0'
+    - name: espressif/esp-zigbee-lib
+      version: ~1.6.0
+    source:
+      path: /Users/renaudjenny/Developer/esp/bathroom_thermostat_controller/esp_zb_examples_common/zcl_utility
+      type: local
+    version: 0.0.1
 direct_dependencies:
 - espressif/esp-zboss-lib
 - espressif/esp-zigbee-lib
 - espressif/led_strip
 - idf
-manifest_hash: 994ab6fce150a23b6adbfeab808b08091b897345dde1a08057f4533c9ee00965
+- light_driver
+- switch_driver
+- zcl_utility
+manifest_hash: 6571933de2abe4fd54fdbfd94a729b9553a2466775d56d02d8e0dfe6b769a85c
 target: esp32c6
 version: 2.0.0

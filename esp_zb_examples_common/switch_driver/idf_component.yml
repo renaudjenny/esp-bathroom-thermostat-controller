@@ -1,0 +1,4 @@
+dependencies:
+  idf: '>=5.0'
+description: Zigbee utility
+version: 0.0.1

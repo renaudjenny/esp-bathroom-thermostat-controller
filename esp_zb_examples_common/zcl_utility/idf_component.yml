@@ -1,0 +1,5 @@
+dependencies:
+  idf: '>=5.0'
+  espressif/esp-zigbee-lib: "~1.6.0"
+description: Zigbee utility
+version: 0.0.1

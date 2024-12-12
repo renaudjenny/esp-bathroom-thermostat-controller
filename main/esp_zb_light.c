@@ -5,6 +5,8 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "ha/esp_zigbee_ha_standard.h"
+#include "soc/gpio_num.h"
+#include "switch_driver.h"
 
 #if !defined ZB_ED_ROLE
 #error Define ZB_ED_ROLE in idf.py menuconfig to compile light (End Device) source code.
@@ -14,12 +16,14 @@ static const char *TAG = "BATHROOM_THERMOSTAT_CONTROLLER";
 /********************* Define functions **************************/
 
 static switch_func_pair_t button_func_pair[] = {
-    {GPIO_INPUT_IO_TOGGLE_SWITCH, SWITCH_ONOFF_TOGGLE_CONTROL}
+    {GPIO_INPUT_IO_TOGGLE_SWITCH, SWITCH_ONOFF_TOGGLE_CONTROL},
+    {GPIO_NUM_5, SWITCH_ONOFF_TOGGLE_CONTROL}
 };
 
 static void zb_buttons_handler(switch_func_pair_t *button_func_pair)
 {
-    if (button_func_pair->func == SWITCH_ONOFF_TOGGLE_CONTROL) {
+    ESP_EARLY_LOGI(TAG, "Button received!!!");
+    if (button_func_pair->pin == GPIO_INPUT_IO_TOGGLE_SWITCH && button_func_pair->func == SWITCH_ONOFF_TOGGLE_CONTROL) {
         /* implemented light switch toggle functionality */
         esp_zb_zcl_on_off_cmd_t cmd_req;
         cmd_req.zcl_basic_cmd.src_endpoint = HA_ONOFF_SWITCH_ENDPOINT;
@@ -29,6 +33,8 @@ static void zb_buttons_handler(switch_func_pair_t *button_func_pair)
         esp_zb_zcl_on_off_cmd_req(&cmd_req);
         esp_zb_lock_release();
         ESP_EARLY_LOGI(TAG, "Send 'on_off toggle' command");
+    } else if (button_func_pair->pin == GPIO_NUM_4 && button_func_pair->func == SWITCH_ONOFF_TOGGLE_CONTROL) {
+        ESP_EARLY_LOGI(TAG, "Button pressed!!!");
     }
 }
 

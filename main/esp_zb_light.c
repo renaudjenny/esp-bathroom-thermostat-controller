@@ -1,12 +1,16 @@
 #include "esp_zb_light.h"
 #include "esp_check.h"
+#include "esp_err.h"
 #include "esp_log.h"
+#include "esp_zigbee_endpoint.h"
+#include "esp_zigbee_type.h"
 #include "nvs_flash.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "ha/esp_zigbee_ha_standard.h"
 #include "soc/gpio_num.h"
 #include "switch_driver.h"
+#include "zcl/esp_zigbee_zcl_common.h"
 
 #if !defined ZB_ED_ROLE
 #error Define ZB_ED_ROLE in idf.py menuconfig to compile light (End Device) source code.
@@ -17,12 +21,11 @@ static const char *TAG = "BATHROOM_THERMOSTAT_CONTROLLER";
 
 static switch_func_pair_t button_func_pair[] = {
     {GPIO_INPUT_IO_TOGGLE_SWITCH, SWITCH_ONOFF_TOGGLE_CONTROL},
-    {GPIO_NUM_5, SWITCH_ONOFF_TOGGLE_CONTROL}
+    {GPIO_NUM_6, SWITCH_ONOFF_TOGGLE_CONTROL}
 };
 
 static void zb_buttons_handler(switch_func_pair_t *button_func_pair)
 {
-    ESP_EARLY_LOGI(TAG, "Button received!!!");
     if (button_func_pair->pin == GPIO_INPUT_IO_TOGGLE_SWITCH && button_func_pair->func == SWITCH_ONOFF_TOGGLE_CONTROL) {
         /* implemented light switch toggle functionality */
         esp_zb_zcl_on_off_cmd_t cmd_req;
@@ -33,8 +36,9 @@ static void zb_buttons_handler(switch_func_pair_t *button_func_pair)
         esp_zb_zcl_on_off_cmd_req(&cmd_req);
         esp_zb_lock_release();
         ESP_EARLY_LOGI(TAG, "Send 'on_off toggle' command");
-    } else if (button_func_pair->pin == GPIO_NUM_4 && button_func_pair->func == SWITCH_ONOFF_TOGGLE_CONTROL) {
-        ESP_EARLY_LOGI(TAG, "Button pressed!!!");
+    } else if (button_func_pair->pin == GPIO_NUM_6 && button_func_pair->func == SWITCH_ONOFF_TOGGLE_CONTROL) {
+        ESP_EARLY_LOGI(TAG, "Factory reset...");
+        esp_zb_factory_reset();
     }
 }
 
@@ -139,23 +143,42 @@ static void esp_zb_task(void *pvParameters)
     esp_zb_cfg_t zb_nwk_cfg = ESP_ZB_ZED_CONFIG();
     esp_zb_init(&zb_nwk_cfg);
 
+    esp_zb_ep_list_t *ep_list = esp_zb_ep_list_create();
+
+    // On Off Light
+    esp_zb_on_off_light_cfg_t light_cfg = ESP_ZB_DEFAULT_ON_OFF_LIGHT_CONFIG();
+    esp_zb_cluster_list_t *esp_zb_on_off_light_cluster_list = esp_zb_on_off_light_clusters_create(&light_cfg);
+    esp_zb_endpoint_config_t light_endpoint_config = {
+        .endpoint = HA_ESP_LIGHT_ENDPOINT,
+        .app_profile_id = ESP_ZB_AF_HA_PROFILE_ID,
+        .app_device_id = ESP_ZB_HA_ON_OFF_LIGHT_DEVICE_ID,
+        .app_device_version = 0,
+    };
+    esp_zb_ep_list_add_ep(ep_list, esp_zb_on_off_light_cluster_list, light_endpoint_config);
+
+    // On Off Switc endpoint
+    esp_zb_on_off_switch_cfg_t switch_cfg = ESP_ZB_DEFAULT_ON_OFF_SWITCH_CONFIG();
+    esp_zb_cluster_list_t *esp_zb_on_off_switch_cluster_list = esp_zb_on_off_switch_clusters_create(&switch_cfg);
+    esp_zb_endpoint_config_t switch_endpoint_config = {
+        .endpoint = HA_ONOFF_SWITCH_ENDPOINT,
+        .app_profile_id = ESP_ZB_AF_HA_PROFILE_ID,
+        .app_device_id = ESP_ZB_HA_ON_OFF_SWITCH_DEVICE_ID,
+        .app_device_version = 0,
+    };
+    esp_zb_ep_list_add_ep(ep_list, esp_zb_on_off_switch_cluster_list, switch_endpoint_config);
+
     zcl_basic_manufacturer_info_t info = {
         .manufacturer_name = ESP_MANUFACTURER_NAME,
         .model_identifier = ESP_MODEL_IDENTIFIER,
     };
+    esp_zcl_utility_add_ep_basic_manufacturer_info(ep_list, HA_ESP_LIGHT_ENDPOINT, &info);
+    esp_zcl_utility_add_ep_basic_manufacturer_info(ep_list, HA_ONOFF_SWITCH_ENDPOINT, &info);
 
-    // On Off Light
-    esp_zb_on_off_light_cfg_t light_cfg = ESP_ZB_DEFAULT_ON_OFF_LIGHT_CONFIG();
-    esp_zb_ep_list_t *esp_zb_on_off_light_ep = esp_zb_on_off_light_ep_create(HA_ESP_LIGHT_ENDPOINT, &light_cfg);
-    esp_zcl_utility_add_ep_basic_manufacturer_info(esp_zb_on_off_light_ep, HA_ESP_LIGHT_ENDPOINT, &info);
-    esp_zb_device_register(esp_zb_on_off_light_ep);
+    if (esp_zb_device_register(ep_list) != ESP_OK) {
+        ESP_LOGW(TAG,  "Can't register device for on off light & switch");
+    }
+
     esp_zb_core_action_handler_register(zb_action_handler);
-
-    // On Off Switch (NEW)
-    esp_zb_on_off_switch_cfg_t switch_cfg = ESP_ZB_DEFAULT_ON_OFF_SWITCH_CONFIG();
-    esp_zb_ep_list_t *esp_zb_on_off_switch_ep = esp_zb_on_off_switch_ep_create(HA_ONOFF_SWITCH_ENDPOINT, &switch_cfg);
-    esp_zcl_utility_add_ep_basic_manufacturer_info(esp_zb_on_off_switch_ep, HA_ONOFF_SWITCH_ENDPOINT, &info);
-    esp_zb_device_register(esp_zb_on_off_switch_ep);
     
     esp_zb_set_primary_network_channel_set(ESP_ZB_PRIMARY_CHANNEL_MASK);
     ESP_ERROR_CHECK(esp_zb_start(false));

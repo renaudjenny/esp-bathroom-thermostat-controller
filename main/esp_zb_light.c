@@ -2,15 +2,21 @@
 #include "esp_check.h"
 #include "esp_err.h"
 #include "esp_log.h"
+#include "esp_zigbee_attribute.h"
+#include "esp_zigbee_cluster.h"
 #include "esp_zigbee_endpoint.h"
 #include "esp_zigbee_type.h"
-#include "nvs_flash.h"
-#include "freertos/FreeRTOS.h"
-#include "freertos/task.h"
 #include "ha/esp_zigbee_ha_standard.h"
+#include "nvs_flash.h"
+#include "freertos/task.h"
 #include "soc/gpio_num.h"
 #include "switch_driver.h"
+#include "zcl/esp_zigbee_zcl_basic.h"
+#include "zcl/esp_zigbee_zcl_command.h"
 #include "zcl/esp_zigbee_zcl_common.h"
+#include "zcl/esp_zigbee_zcl_on_off.h"
+#include <stdint.h>
+#include <string.h>
 
 #if !defined ZB_ED_ROLE
 #error Define ZB_ED_ROLE in idf.py menuconfig to compile light (End Device) source code.
@@ -27,15 +33,17 @@ static switch_func_pair_t button_func_pair[] = {
 static void zb_buttons_handler(switch_func_pair_t *button_func_pair)
 {
     if (button_func_pair->pin == GPIO_INPUT_IO_TOGGLE_SWITCH && button_func_pair->func == SWITCH_ONOFF_TOGGLE_CONTROL) {
-        /* implemented light switch toggle functionality */
-        esp_zb_zcl_on_off_cmd_t cmd_req;
-        cmd_req.zcl_basic_cmd.src_endpoint = HA_ONOFF_SWITCH_ENDPOINT;
-        cmd_req.address_mode = ESP_ZB_APS_ADDR_MODE_DST_ADDR_ENDP_NOT_PRESENT;
-        cmd_req.on_off_cmd_id = ESP_ZB_ZCL_CMD_ON_OFF_TOGGLE_ID;
+        esp_zb_zcl_on_off_cmd_t cmd_req = {
+            .zcl_basic_cmd = {
+                .src_endpoint = BATHROOM_SWITCH_ENDPOINT
+            },
+            .address_mode = ESP_ZB_APS_ADDR_MODE_DST_ADDR_ENDP_NOT_PRESENT,
+            .on_off_cmd_id = ESP_ZB_ZCL_CMD_ON_OFF_TOGGLE_ID
+        };
         esp_zb_lock_acquire(portMAX_DELAY);
         esp_zb_zcl_on_off_cmd_req(&cmd_req);
         esp_zb_lock_release();
-        ESP_EARLY_LOGI(TAG, "Send 'on_off toggle' command");
+        ESP_EARLY_LOGI(TAG, "Send switch toggle");
     } else if (button_func_pair->pin == GPIO_NUM_6 && button_func_pair->func == SWITCH_ONOFF_TOGGLE_CONTROL) {
         ESP_EARLY_LOGI(TAG, "Factory reset...");
         esp_zb_factory_reset();
@@ -111,7 +119,7 @@ static esp_err_t zb_attribute_handler(const esp_zb_zcl_set_attr_value_message_t 
                         message->info.status);
     ESP_LOGI(TAG, "Received message: endpoint(%d), cluster(0x%x), attribute(0x%x), data size(%d)", message->info.dst_endpoint, message->info.cluster,
              message->attribute.id, message->attribute.data.size);
-    if (message->info.dst_endpoint == HA_ESP_LIGHT_ENDPOINT) {
+    if (message->info.dst_endpoint == BATHROOM_LIGHT_ENDPOINT) {
         if (message->info.cluster == ESP_ZB_ZCL_CLUSTER_ID_ON_OFF) {
             if (message->attribute.id == ESP_ZB_ZCL_ATTR_ON_OFF_ON_OFF_ID && message->attribute.data.type == ESP_ZB_ZCL_ATTR_TYPE_BOOL) {
                 light_state = message->attribute.data.value ? *(bool *)message->attribute.data.value : light_state;
@@ -145,37 +153,44 @@ static void esp_zb_task(void *pvParameters)
 
     esp_zb_ep_list_t *ep_list = esp_zb_ep_list_create();
 
-    // On Off Light
+    // Light
     esp_zb_on_off_light_cfg_t light_cfg = ESP_ZB_DEFAULT_ON_OFF_LIGHT_CONFIG();
-    esp_zb_cluster_list_t *esp_zb_on_off_light_cluster_list = esp_zb_on_off_light_clusters_create(&light_cfg);
-    esp_zb_endpoint_config_t light_endpoint_config = {
-        .endpoint = HA_ESP_LIGHT_ENDPOINT,
+    esp_zb_cluster_list_t *light_cluster_list = esp_zb_on_off_light_clusters_create(&light_cfg);
+    esp_zb_endpoint_config_t light_ep_config = {
+        .endpoint = BATHROOM_LIGHT_ENDPOINT,
         .app_profile_id = ESP_ZB_AF_HA_PROFILE_ID,
         .app_device_id = ESP_ZB_HA_ON_OFF_LIGHT_DEVICE_ID,
-        .app_device_version = 0,
     };
-    esp_zb_ep_list_add_ep(ep_list, esp_zb_on_off_light_cluster_list, light_endpoint_config);
-
-    // On Off Switc endpoint
-    esp_zb_on_off_switch_cfg_t switch_cfg = ESP_ZB_DEFAULT_ON_OFF_SWITCH_CONFIG();
-    esp_zb_cluster_list_t *esp_zb_on_off_switch_cluster_list = esp_zb_on_off_switch_clusters_create(&switch_cfg);
-    esp_zb_endpoint_config_t switch_endpoint_config = {
-        .endpoint = HA_ONOFF_SWITCH_ENDPOINT,
-        .app_profile_id = ESP_ZB_AF_HA_PROFILE_ID,
-        .app_device_id = ESP_ZB_HA_ON_OFF_SWITCH_DEVICE_ID,
-        .app_device_version = 0,
-    };
-    esp_zb_ep_list_add_ep(ep_list, esp_zb_on_off_switch_cluster_list, switch_endpoint_config);
-
-    zcl_basic_manufacturer_info_t info = {
+    esp_zb_ep_list_add_ep(ep_list, light_cluster_list, light_ep_config);
+    zcl_basic_manufacturer_info_t light_info = {
         .manufacturer_name = ESP_MANUFACTURER_NAME,
         .model_identifier = ESP_MODEL_IDENTIFIER,
     };
-    esp_zcl_utility_add_ep_basic_manufacturer_info(ep_list, HA_ESP_LIGHT_ENDPOINT, &info);
-    esp_zcl_utility_add_ep_basic_manufacturer_info(ep_list, HA_ONOFF_SWITCH_ENDPOINT, &info);
+    esp_zcl_utility_add_ep_basic_manufacturer_info(ep_list, BATHROOM_LIGHT_ENDPOINT, &light_info);
+
+    // Switch
+    esp_zb_on_off_switch_cfg_t switch_cfg = ESP_ZB_DEFAULT_ON_OFF_SWITCH_CONFIG();
+    esp_zb_cluster_list_t *switch_cluster_list = esp_zb_zcl_cluster_list_create();
+    esp_zb_cluster_list_add_basic_cluster(switch_cluster_list, esp_zb_basic_cluster_create(&switch_cfg.basic_cfg), ESP_ZB_ZCL_CLUSTER_CLIENT_ROLE);
+    esp_zb_cluster_list_add_identify_cluster(switch_cluster_list, esp_zb_identify_cluster_create(&switch_cfg.identify_cfg), ESP_ZB_ZCL_CLUSTER_CLIENT_ROLE);
+    esp_zb_attribute_list_t *switch_attr_list = esp_zb_zcl_attr_list_create(ESP_ZB_ZCL_CLUSTER_ID_ON_OFF);
+    bool switch_value = false;
+    esp_zb_on_off_cluster_add_attr(switch_attr_list, ESP_ZB_ZCL_CLUSTER_ID_ON_OFF, &switch_value);
+
+    esp_zb_endpoint_config_t switch_endpoint_config = {
+        .endpoint = BATHROOM_SWITCH_ENDPOINT,
+        .app_profile_id = ESP_ZB_AF_HA_PROFILE_ID,
+        .app_device_id = ESP_ZB_HA_ON_OFF_SWITCH_DEVICE_ID,
+    };
+    esp_zb_ep_list_add_ep(ep_list, switch_cluster_list, switch_endpoint_config);
+    zcl_basic_manufacturer_info_t switch_info = {
+        .manufacturer_name = ESP_MANUFACTURER_NAME,
+        .model_identifier = ESP_MODEL_IDENTIFIER,
+    };
+    esp_zcl_utility_add_ep_basic_manufacturer_info(ep_list, BATHROOM_SWITCH_ENDPOINT, &switch_info);
 
     if (esp_zb_device_register(ep_list) != ESP_OK) {
-        ESP_LOGW(TAG,  "Can't register device for on off light & switch");
+        ESP_LOGW(TAG,  "Can't register bathroom device");
     }
 
     esp_zb_core_action_handler_register(zb_action_handler);

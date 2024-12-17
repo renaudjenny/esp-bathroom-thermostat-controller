@@ -21,13 +21,13 @@
 #define INSTALLCODE_POLICY_ENABLE       false    /* enable the install code policy for security */
 #define ED_AGING_TIMEOUT                ESP_ZB_ED_AGING_TIMEOUT_64MIN
 #define ED_KEEP_ALIVE                   3000    /* 3000 millisecond */
-#define HA_ESP_LIGHT_ENDPOINT           10    /* esp light bulb device endpoint, used to process light controlling commands */
-#define HA_ONOFF_SWITCH_ENDPOINT        1          /* esp light switch device endpoint */
+#define BATHROOM_LIGHT_ENDPOINT         10
+#define BATHROOM_SWITCH_ENDPOINT        1
 #define ESP_ZB_PRIMARY_CHANNEL_MASK     ESP_ZB_TRANSCEIVER_ALL_CHANNELS_MASK  /* Zigbee primary channel mask use in the example */
 
 /* Basic manufacturer information */
 #define ESP_MANUFACTURER_NAME "\x09""ESPRESSIF"      /* Customized manufacturer name */
-#define ESP_MODEL_IDENTIFIER "ESP32-C6 Bathroom 0.0.2" /* Customized model identifier */
+#define ESP_MODEL_IDENTIFIER "ESP32-C6 Bathroom 0.0.11" /* Customized model identifier */
 
 #define ESP_ZB_ZED_CONFIG()                                         \
     {                                                               \

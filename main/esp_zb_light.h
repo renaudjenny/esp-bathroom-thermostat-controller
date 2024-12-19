@@ -22,7 +22,7 @@
 #define ED_AGING_TIMEOUT                ESP_ZB_ED_AGING_TIMEOUT_64MIN
 #define ED_KEEP_ALIVE                   3000    /* 3000 millisecond */
 #define BATHROOM_LIGHT_ENDPOINT         10
-#define BATHROOM_SWITCH_ENDPOINT        1
+#define BATHROOM_BINARY_INPUT_ENDPOINT  1
 #define ESP_ZB_PRIMARY_CHANNEL_MASK     ESP_ZB_TRANSCEIVER_ALL_CHANNELS_MASK  /* Zigbee primary channel mask use in the example */
 
 /* Basic manufacturer information */

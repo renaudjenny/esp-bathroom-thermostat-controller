@@ -1,4 +1,4 @@
 dependencies:
   idf: '>=5.0'
-description: Zigbee utility
+description: Zigbee Switch driver
 version: 0.0.1

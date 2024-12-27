@@ -27,7 +27,7 @@
 
 /* Basic manufacturer information */
 #define ESP_MANUFACTURER_NAME "\x09""ESPRESSIF"      /* Customized manufacturer name */
-#define ESP_MODEL_IDENTIFIER "ESP32-C6 Bathroom 0.0.11" /* Customized model identifier */
+#define ESP_MODEL_IDENTIFIER "\x24""ESP32-C6 Bathroom 0.0.11" /* Customized model identifier */
 
 #define ESP_ZB_ZED_CONFIG()                                         \
     {                                                               \

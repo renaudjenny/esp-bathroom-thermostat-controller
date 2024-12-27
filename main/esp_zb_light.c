@@ -1,4 +1,6 @@
 #include "esp_zb_light.h"
+#include "driver/gpio.h"
+#include "esp_bit_defs.h"
 #include "esp_check.h"
 #include "esp_err.h"
 #include "esp_log.h"
@@ -17,6 +19,7 @@
 #include "zcl/esp_zigbee_zcl_common.h"
 #include "zcl/esp_zigbee_zcl_on_off.h"
 #include <stdint.h>
+#include <stdio.h>
 #include <string.h>
 
 #if !defined ZB_ED_ROLE
@@ -26,50 +29,63 @@
 static const char *TAG = "BATHROOM_THERMOSTAT_CONTROLLER";
 /********************* Define functions **************************/
 
-static switch_func_pair_t button_func_pair[] = {
-    {GPIO_INPUT_IO_TOGGLE_SWITCH, SWITCH_ONOFF_TOGGLE_CONTROL},
-    {GPIO_NUM_6, SWITCH_ONOFF_TOGGLE_CONTROL}
-};
+static void switch_isr_handler(void *data) {
+    esp_zb_zcl_attr_t *binary_input_present_value = esp_zb_zcl_get_attribute(BATHROOM_BINARY_INPUT_ENDPOINT, ESP_ZB_ZCL_CLUSTER_ID_BINARY_INPUT, ESP_ZB_ZCL_CLUSTER_SERVER_ROLE, ESP_ZB_ZCL_ATTR_BINARY_INPUT_PRESENT_VALUE_ID);
+    bool binary_input_current_value = *(bool *)binary_input_present_value->data_p;
+    bool binary_input_new_value = !binary_input_current_value;
+    *((bool *)binary_input_present_value->data_p) = !binary_input_current_value;
+    esp_zb_lock_acquire(portMAX_DELAY);
+    ESP_ERROR_CHECK(esp_zb_zcl_set_attribute_val(BATHROOM_BINARY_INPUT_ENDPOINT, ESP_ZB_ZCL_CLUSTER_ID_BINARY_INPUT, ESP_ZB_ZCL_CLUSTER_SERVER_ROLE, ESP_ZB_ZCL_ATTR_BINARY_INPUT_PRESENT_VALUE_ID, binary_input_present_value->data_p, false));
+    esp_zb_lock_release();
 
-static void zb_buttons_handler(switch_func_pair_t *button_func_pair)
-{
-    if (button_func_pair->pin == GPIO_INPUT_IO_TOGGLE_SWITCH && button_func_pair->func == SWITCH_ONOFF_TOGGLE_CONTROL) {
-        esp_zb_zcl_attr_t *binary_input_present_value = esp_zb_zcl_get_attribute(BATHROOM_BINARY_INPUT_ENDPOINT, ESP_ZB_ZCL_CLUSTER_ID_BINARY_INPUT, ESP_ZB_ZCL_CLUSTER_CLIENT_ROLE, ESP_ZB_ZCL_ATTR_BINARY_INPUT_PRESENT_VALUE_ID);
-        bool binary_input_current_value = *(bool *)binary_input_present_value->data_p;
-        bool binary_input_new_value = !binary_input_current_value;
-        binary_input_present_value->data_p = &binary_input_new_value;
-        esp_zb_zcl_attribute_data_t binary_input_data = {
-            .value = &binary_input_new_value,
-            .size = 1,
-            .type = ESP_ZB_ZCL_ATTR_TYPE_BOOL,
-        };
-        esp_zb_zcl_attribute_t binary_input_present_value_attr_field = {
-            .data = binary_input_data,
-            .id = ESP_ZB_ZCL_ATTR_BINARY_INPUT_PRESENT_VALUE_ID,
-        };
-        esp_zb_zcl_write_attr_cmd_t cmd_req = {
-            .zcl_basic_cmd = {
-                .src_endpoint = BATHROOM_BINARY_INPUT_ENDPOINT
-            },
-            .address_mode = ESP_ZB_APS_ADDR_MODE_DST_ADDR_ENDP_NOT_PRESENT,
-            .attr_field = &binary_input_present_value_attr_field,
-            .attr_number = 1
-        };
-        esp_zb_lock_acquire(portMAX_DELAY);
-        esp_zb_zcl_write_attr_cmd_req(&cmd_req);
-        esp_zb_lock_release();
-        ESP_EARLY_LOGI(TAG, "Send binary input toggle to %s", binary_input_new_value ? "true" : "false");
-    } else if (button_func_pair->pin == GPIO_NUM_6 && button_func_pair->func == SWITCH_ONOFF_TOGGLE_CONTROL) {
-        ESP_EARLY_LOGI(TAG, "Factory reset...");
-        esp_zb_factory_reset();
-    }
+    esp_zb_zcl_report_attr_cmd_t cmd_req = {
+        .address_mode = ESP_ZB_APS_ADDR_MODE_DST_ADDR_ENDP_NOT_PRESENT,
+        .attributeID = ESP_ZB_ZCL_ATTR_BINARY_INPUT_PRESENT_VALUE_ID,
+        .clusterID = ESP_ZB_ZCL_CLUSTER_ID_BINARY_INPUT,
+        .direction = ESP_ZB_ZCL_CMD_DIRECTION_TO_CLI,
+        .zcl_basic_cmd.src_endpoint = BATHROOM_BINARY_INPUT_ENDPOINT, 
+    };
+
+    esp_zb_lock_acquire(portMAX_DELAY);
+    ESP_ERROR_CHECK(esp_zb_zcl_report_attr_cmd_req(&cmd_req));
+    esp_zb_lock_release();
+    ESP_EARLY_LOGI(TAG, "Send binary input attribute report to %s", binary_input_new_value ? "true" : "false");
+}
+
+static void reset_isr_handler(void *data) {
+    ESP_EARLY_LOGI(TAG, "Factory reset...");
+    esp_zb_factory_reset();
+}
+
+static void switch_init(void) {
+    gpio_config_t switch_config = {
+        .intr_type = GPIO_INTR_POSEDGE,
+        .mode = GPIO_MODE_INPUT,
+        .pin_bit_mask = BIT(22),
+        .pull_down_en = GPIO_PULLDOWN_DISABLE,
+        .pull_up_en = GPIO_PULLDOWN_DISABLE
+    };
+    ESP_ERROR_CHECK(gpio_config(&switch_config));
+
+    gpio_config_t reset_config = {
+        .intr_type = GPIO_INTR_POSEDGE,
+        .mode = GPIO_MODE_INPUT,
+        .pin_bit_mask = BIT(23),
+        .pull_down_en = GPIO_PULLDOWN_DISABLE,
+        .pull_up_en = GPIO_PULLDOWN_DISABLE
+    };
+    ESP_ERROR_CHECK(gpio_config(&reset_config));
+
+    ESP_ERROR_CHECK(gpio_install_isr_service(ESP_INTR_FLAG_DEFAULT));
+
+    ESP_ERROR_CHECK(gpio_isr_handler_add(22, switch_isr_handler, NULL));
+    ESP_ERROR_CHECK(gpio_isr_handler_add(23, reset_isr_handler, NULL));
 }
 
 static esp_err_t deferred_driver_init(void)
 {
     light_driver_init(LIGHT_DEFAULT_OFF);
-    ESP_RETURN_ON_FALSE(switch_driver_init(button_func_pair, PAIR_SIZE(button_func_pair), zb_buttons_handler), ESP_FAIL, TAG, 
-     "Failed to initialize switch driver");
+    switch_init();
     return ESP_OK;
 }
 
@@ -186,8 +202,8 @@ static void esp_zb_task(void *pvParameters)
 
     // Binary input
     esp_zb_binary_input_cluster_cfg_t binary_input_cfg = {
-        .out_of_service = false,
-        .status_flags = 0
+        .out_of_service = ESP_ZB_ZCL_BINARY_INPUT_OUT_OF_SERVICE_DEFAULT_VALUE,
+        .status_flags = ESP_ZB_ZCL_BINARY_INPUT_STATUS_FLAG_DEFAULT_VALUE
     };
     esp_zb_basic_cluster_cfg_t binary_input_basic_cfg = {
         .power_source = ESP_ZB_ZCL_BASIC_POWER_SOURCE_DEFAULT_VALUE,
@@ -200,17 +216,18 @@ static void esp_zb_task(void *pvParameters)
     esp_zb_attribute_list_t *binary_input_basic_cluster = esp_zb_basic_cluster_create(&binary_input_basic_cfg);
     esp_zb_basic_cluster_add_attr(binary_input_basic_cluster, ESP_ZB_ZCL_ATTR_BASIC_MANUFACTURER_NAME_ID, ESP_MANUFACTURER_NAME);
     esp_zb_basic_cluster_add_attr(binary_input_basic_cluster, ESP_ZB_ZCL_ATTR_BASIC_MODEL_IDENTIFIER_ID, ESP_MODEL_IDENTIFIER);
-    esp_zb_cluster_list_add_basic_cluster(binary_input_cluster_list, binary_input_basic_cluster, ESP_ZB_ZCL_CLUSTER_CLIENT_ROLE);
-    esp_zb_cluster_list_add_identify_cluster(binary_input_cluster_list, esp_zb_identify_cluster_create(&binary_input_identify_cfg), ESP_ZB_ZCL_CLUSTER_CLIENT_ROLE);
+    esp_zb_cluster_list_add_basic_cluster(binary_input_cluster_list, binary_input_basic_cluster, ESP_ZB_ZCL_CLUSTER_SERVER_ROLE);
+    esp_zb_cluster_list_add_identify_cluster(binary_input_cluster_list, esp_zb_identify_cluster_create(&binary_input_identify_cfg), ESP_ZB_ZCL_CLUSTER_SERVER_ROLE);
+    esp_zb_cluster_list_add_identify_cluster(binary_input_cluster_list, esp_zb_zcl_attr_list_create(ESP_ZB_ZCL_CLUSTER_ID_IDENTIFY), ESP_ZB_ZCL_CLUSTER_CLIENT_ROLE);
     esp_zb_attribute_list_t *binary_input_attr_list = esp_zb_binary_input_cluster_create(&binary_input_cfg);
-    bool binary_input_value = false;
-    esp_zb_binary_input_cluster_add_attr(binary_input_attr_list, ESP_ZB_ZCL_ATTR_BINARY_INPUT_PRESENT_VALUE_ID, &binary_input_value);
-    esp_zb_cluster_list_add_binary_input_cluster(binary_input_cluster_list, binary_input_attr_list, ESP_ZB_ZCL_CLUSTER_CLIENT_ROLE);
+    esp_zb_binary_input_cluster_add_attr(binary_input_attr_list, ESP_ZB_ZCL_ATTR_BINARY_INPUT_DESCRIPTION_ID, "\x0C""Switch state");
+    esp_zb_binary_input_cluster_add_attr(binary_input_attr_list, ESP_ZB_ZCL_ATTR_BINARY_INPUT_PRESENT_VALUE_ID, &(bool *){ false });
+    esp_zb_cluster_list_add_binary_input_cluster(binary_input_cluster_list, binary_input_attr_list, ESP_ZB_ZCL_CLUSTER_SERVER_ROLE);
 
     esp_zb_endpoint_config_t binary_input_endpoint_config = {
         .endpoint = BATHROOM_BINARY_INPUT_ENDPOINT,
         .app_profile_id = ESP_ZB_AF_HA_PROFILE_ID,
-        .app_device_id = ESP_ZB_HA_ON_OFF_OUTPUT_DEVICE_ID,
+        .app_device_id = ESP_ZB_HA_CUSTOM_ATTR_DEVICE_ID,
         .app_device_version = 0,
     };
     esp_zb_ep_list_add_ep(ep_list, binary_input_cluster_list, binary_input_endpoint_config);

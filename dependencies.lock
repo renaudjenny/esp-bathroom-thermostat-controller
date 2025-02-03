@@ -68,5 +68,5 @@ direct_dependencies:
 - switch_driver
 - zcl_utility
 manifest_hash: 6571933de2abe4fd54fdbfd94a729b9553a2466775d56d02d8e0dfe6b769a85c
-target: esp32c6
+target: esp32h2
 version: 2.0.0

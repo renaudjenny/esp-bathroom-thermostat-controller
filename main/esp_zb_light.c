@@ -61,7 +61,7 @@ static void switch_init(void) {
     gpio_config_t switch_config = {
         .intr_type = GPIO_INTR_POSEDGE,
         .mode = GPIO_MODE_INPUT,
-        .pin_bit_mask = BIT(22),
+        .pin_bit_mask = BIT(10),
         .pull_down_en = GPIO_PULLDOWN_DISABLE,
         .pull_up_en = GPIO_PULLDOWN_DISABLE
     };
@@ -70,7 +70,7 @@ static void switch_init(void) {
     gpio_config_t reset_config = {
         .intr_type = GPIO_INTR_POSEDGE,
         .mode = GPIO_MODE_INPUT,
-        .pin_bit_mask = BIT(23),
+        .pin_bit_mask = BIT(11),
         .pull_down_en = GPIO_PULLDOWN_DISABLE,
         .pull_up_en = GPIO_PULLDOWN_DISABLE
     };
@@ -78,8 +78,8 @@ static void switch_init(void) {
 
     ESP_ERROR_CHECK(gpio_install_isr_service(ESP_INTR_FLAG_DEFAULT));
 
-    ESP_ERROR_CHECK(gpio_isr_handler_add(22, switch_isr_handler, NULL));
-    ESP_ERROR_CHECK(gpio_isr_handler_add(23, reset_isr_handler, NULL));
+    ESP_ERROR_CHECK(gpio_isr_handler_add(10, switch_isr_handler, NULL));
+    ESP_ERROR_CHECK(gpio_isr_handler_add(11, reset_isr_handler, NULL));
 }
 
 static esp_err_t deferred_driver_init(void)
@@ -274,7 +274,7 @@ static void esp_zb_task(void *pvParameters)
     }
 
     esp_zb_core_action_handler_register(zb_action_handler);
-    
+
     esp_zb_set_primary_network_channel_set(ESP_ZB_PRIMARY_CHANNEL_MASK);
     ESP_ERROR_CHECK(esp_zb_start(false));
     esp_zb_stack_main_loop();
